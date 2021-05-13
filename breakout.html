@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="de_De, en_US">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="author" content="Mark Herdt">
+        <meta name="description" content="Welcome to my website, i'm an aspiring game developer and am currently studying game programming at the school of games in cologne.">
+        <title>Breakout</title>
+        <!-- Doesn't work on Edge if not hosted on a server -->
+        <link rel="icon" type="image/png" href="https://i.imgur.com/hMRLuCJ.png">
+        <!-- Needs to be ".ico" for Firefox -->
+        <link rel="icon" type="image/icon" href="images/logo.ico">
+        <style>
+            body{
+                margin: 0;
+                overflow: hidden; /* Needed to hide scrollbars when the ".collision" animation gets called */
+                font-family: sans-serif;
+                color: white;
+            }
+            canvas{
+                position: relative;
+                z-index: 0; /* Needed, so the canvas is on top of the UI */
+            }
+            /* Container for background */
+            #body{
+                width: 100vw;
+                height: 100vh;
+                margin: 0;
+                background: rgba(0, 0, 0, .9375);
+            }
+            /* Displayed once, when the page is loaded */
+            #startScreen{
+                width: 50%;
+                height: 37.5%;
+                position: absolute;
+                top: .25%;
+                left: 50%;
+                transform: translateX(-50%);
+                -webkit-transform: translateX(-50%);
+                -ms-transform: translateX(-50%);
+                display: flex;
+                display: -webkit-box;
+                display: -ms-flexbox;
+                justify-content: center;
+                -webkit-box-pack: center;
+                -ms-flex-pack: center;
+                align-items: center;
+                -webkit-box-align: center;
+                -ms-flex-align: center;
+                font-size: 5vw;
+                text-shadow: 0 0 10px  black;
+                z-index: 1;
+            }
+            /* Displays the score in the background */
+            #score{
+                width: max-content;
+                width: -moz-max-content;
+                height: max-content;
+                position: absolute;
+                top: 23.75%;
+                left: 50%;
+                transform: translateX(-50%);
+                -webkit-transform: translateX(-50%);
+                -ms-transform: translateX(-50%);
+                font-size: 22.5vw;
+                font-weight: bold;
+                color: rgba(255, 255, 0, .75);
+                text-shadow: 0 0 25px rgba(255, 255, 0, .25);
+            }
+            /* Displays the multiplier in the background */
+            #multiplier{
+                width: max-content;
+                width: -moz-max-content;
+                height: max-content;
+                position: absolute;
+                top: 75%;
+                left: 50%;
+                transform: translateX(-50%);
+                -webkit-transform: translateX(-50%);
+                -ms-transform: translateX(-50%);
+                font-size: 10vw;
+                color: red;
+                font-style: italic;
+                text-shadow: .5px .5px 5px rgba(255, 0, 0, 1);
+            }
+            /* Displays the highest multiplier in the background (only visible in "#winScreen") */
+            #highestMultiplier{
+                width: max-content;
+                width: -moz-max-content;
+                position: absolute;
+                top: 67.5%;
+                left: 50%;
+                transform: translateX(-50%);
+                -webkit-transform: translateX(-50%);
+                -ms-transform: translateX(-50%);
+                font-size: 2.5vw;
+                color: red;
+                text-shadow: .5px .5px 5px rgba(255, 0, 0, 1);
+                visibility: hidden;
+            }
+            /* Displayed when the game is finished */
+            #winScreen{
+                max-width: 100vw;
+                max-height: 100vh;
+                position: absolute;
+                top: 0;
+                left: 50%;
+                transform: translateX(-50%);
+                -webkit-transform: translateX(-50%);
+                -ms-transform: translateX(-50%);
+                display: flex;
+                display: -webkit-box;
+                display: -ms-flexbox;
+                justify-content: center;
+                -webkit-box-pack: center;
+                -ms-flex-pack: center;
+                align-items: center;
+                -webkit-box-align: center;
+                -ms-flex-align: center;
+                text-align: center;
+                font-weight: bold;
+                font-size: 7.5vw;
+                color: rgba(255, 255, 0, .875);
+                text-shadow: 0 0 25px rgba(255, 255, 0, .25);
+                z-index: 1;
+            }
+            /* Volume icon in upper left corner */
+            #volume{
+                width: 2.5em;
+                height: auto;
+                position: absolute;
+                top: 2.5%;
+                left: 2.5%;
+                cursor: pointer;
+                z-index: 1;
+            }
+            /* X icon in upper left corner */
+            #x{
+                width: 2.5em;
+                height: auto;
+                position: absolute;
+                top: 2%;
+                left: 2.5%;
+                cursor: pointer;
+                visibility: hidden;
+                z-index: 1;
+            }
+        </style>
+    </head>
+    <body onresize="resizeCanvas()">
+        <audio id="pongSound"><source src="sound/pongSound.mp3" type="audio/mp3"></audio>
+        <audio id="coin"><source src="sound/coinDropping.mp3" type="audio/mp3"></audio>
+        <!-- Displayed when the game is finished -->
+        <div id="winScreen"></div>
+        <!-- Container for background -->
+        <section id="body">
+            <!-- Volume icon in upper left corner -->
+            <div><img id="volume" src="images/volumeIcon.png" title="Sound on/off"></div>
+            <!-- X icon in upper left corner -->
+            <div><img id="x" src="images/redX.svg" title="Sound on/off"></div>
+            <!-- Displays the score in the background -->
+            <div id="score"></div>
+            <!-- Displays the highest multiplier in the background (only visible in "#winScreen") -->
+            <div id="highestMultiplier"></div>
+            <!-- Displays the multiplier in the background -->
+            <div id="multiplier"></div>
+            <!-- Displayed once, when the page is loaded -->
+            <div id="startScreen"><b>Click the Screen <br> to start the game</b></div>
+            <canvas id="canvas"></canvas>
+            <script type="text/javascript">
+                var canvas, context;
+                canvas = document.getElementById("canvas");
+                context = canvas.getContext("2d");
+
+                isPlaying = false; // If game is currently running or not
+                var volume = true;
+                var pongSound = document.getElementById("pongSound");
+                var isPlayingPongSound = false;
+                var coinSound = document.getElementById("coin");
+                var isPlayingCoinSound = false;
+
+                var mouseX;
+                var mouseY;
+
+                var ballRadius;
+                var ballRadiusValue = .000005; // Radius of ball
+                var ballSpeed = 3.75; // Speed the ball moves with
+                var ballSpeedX;
+                var ballSpeedY;
+                var ballX;
+                var ballY;
+
+                var paddleWidth;
+                var paddleWidthValue = .125; // Width of paddles
+                var paddleHeight;
+                var paddleHeightValue = .01; // Height of paddles
+                var paddleMargin = canvas.height / 25; // Margin the paddles have from the wall
+                var paddleX;
+                var paddleY;
+
+                var brickColumn = 20;
+                var brickRow = 10;
+                var gameStarted = false;
+                var brickGrid = new Array(brickColumn * brickRow);
+                var bricks = brickGrid.length; // Number of active bricks
+                var colors = new Array();
+                var brickWidth;
+                var brickHeight;
+                var brickMargin; // Space between bricks
+                var brickMargin_Horizontal  = canvas.width / 2; // Space between the first/last brick an the wall
+                var brickMargin_Vertical = canvas.height / 2; // Space between the first/last brick an the wall
+
+                var score = document.getElementById("score");
+                var scoreValue = 0;
+                var tempScoreValue = 0;
+                var tempScore = 0; // Saves the score reached in one round, resets with ball reset and saves its value in "score" after it is multiplied with "scoreMultiplier"
+                var scoreMultiplier = document.getElementById("multiplier");
+                var scoreMultiplierValue = 0; // Multiplier for "tempScore", each consecutive brick hit increases the multiplier by 1, resets on ball reset
+                var highestMultiplierValue = 0;
+
+                // Moves the right paddle to the vertical position of the mouse
+                function getMousePosition(evt) {
+                    var rect = canvas.getBoundingClientRect(); // Position of canvas relative to the viewport
+                    var root = document.documentElement; // Reference to the "<html>" document
+
+                    // "evt.clientX": Horizontal position of mouse
+                    // "rect.left": Rest of canvas if the site has been scrolled to the right
+                    // "root.scrollLeft": How far the site has been scrolled to rhe right side of the screen
+                    mouseX = evt.clientX - rect.left -root.scrollLeft;
+                    // "evt.clientY": Vertical position of mouse
+                    // "rect.top": Rest of canvas if the site has been scrolled downwards
+                    // "root.scrollTop": How far the site has been scrolled downwards
+                    mouseY = evt.clientY - rect.top -root.scrollTop;
+
+                    paddleX = mouseX - (paddleWidth / 2);
+                }
+                // Main function
+                window.onload = function() {
+                    resizeCanvas();
+                    startGame();
+
+                    // Screen has to be clicked once in order to start the game (when the site gets loaded)
+                    if (!isPlaying)
+                    {
+                        canvas.addEventListener("click", function() {
+                            isPlaying = true;
+                            var startScreen = document.getElementById("startScreen");
+                            startScreen.style.display = "none";
+                        });
+                    }
+
+                    setInterval(drawCanvas, 1);
+
+                    // Calls the function "getMousePosition" when the mouse is moved
+                    canvas.addEventListener("mousemove", getMousePosition);
+                };
+
+                // Resizes the canvas depending on the screen resolution
+                function resizeCanvas() {
+                    // Sets the canvas width and height to the users viewport
+                    context.canvas.width = document.body.clientWidth;
+                    context.canvas.height = document.body.clientHeight;
+
+                    // Ball
+                    ballRadius = (canvas.width * canvas.height) * ballRadiusValue;
+                    ballX = (canvas.width / 2) - (ballRadius / 2); // Center of canvas width
+                    ballY = (canvas.height / 2) - (ballRadius / 2); // center of canvas height
+
+                    // Paddle
+                    paddleWidth = canvas.width * paddleWidthValue;
+                    paddleHeight = canvas.height * paddleHeightValue;
+                    paddleX = (canvas.width / 2) - (paddleWidth / 2); // Center of canvas width
+                    paddleY = (canvas.height - (paddleHeight * paddleMargin));
+
+                    // Bricks
+                    brickWidth = (canvas.width - (brickMargin_Horizontal * 2)) / brickColumn;
+                    brickHeight = canvas.height * .025;
+                    brickMargin = brickWidth / 50;
+                }
+                // Draws everything that's displayed on the canvas
+                function drawCanvas() {
+                    background();
+                    drawBricks();
+                    paddle();
+                    ball();
+                    ballMovement();
+                }
+                function background() {
+                    context.clearRect(0, 0, canvas.width, canvas.height);
+                    context.fillStyle = "transparent";
+                    context.fillRect(0, 0, canvas.width, canvas.height);
+
+                    // Toggles sound
+                    var volumeIcon = document.getElementById("volume");
+                    var xIcon = document.getElementById("x");
+                    volumeIcon.onclick = function () {
+                        if (volume) // When volume is on
+                        {
+                            xIcon.style.visibility = "visible";
+                            volume = false;
+                        }
+                        else // When volume is off
+                        {
+                            xIcon.style.visibility = "hidden";
+                            volume = true;
+                        }
+                    };
+                    // Can't click "volumeIcon" when "xIcon" is visible, so "xIcon" also needs a click event
+                    xIcon.onclick = function () {
+                        xIcon.style.visibility = "hidden";
+                        volume = true;
+                    };
+
+                    // Displayed when the game is finished
+                    if (bricks == 0)
+                    {
+                        resetBall();
+                        var winScreen = document.getElementById("winScreen");
+                        var highestMultiplier = document.getElementById("highestMultiplier");
+
+                        winScreen.style.visibility = "visible";
+                        winScreen.innerHTML = "You Won" + "<br>" + "Score" + "<br>";
+
+                        highestMultiplier.style.visibility = "visible";
+                        highestMultiplier.innerHTML = "Highest Multiplier";
+                        scoreMultiplier.innerHTML = "x" +  highestMultiplierValue;
+
+                        // Reloads the page on click
+                        if (!isPlaying)
+                        {
+                            document.addEventListener("click", function() {
+                                document.location.reload(true);
+                            });
+                        }
+                    }
+                }
+                function drawBricks() {
+                    // Sets the color and the bool, that the brick is not destroyed yet
+                    if (!gameStarted) // Enters once (on page load)
+                    {
+                        for (var i = 0; i < brickGrid.length; i++)
+                        {
+                            brickGrid[i] = true;
+                            colors[i] = randomColor();
+                        }
+                        gameStarted = true;
+                    }
+                    var k = 0; // "brickGrid[]" index number
+                    // Draws the bricks
+                    for (var i = 0; i < brickRow; i++)
+                    {
+                        for (var j = 0; j < brickColumn; j++)
+                        {
+                            if (brickGrid[k]) // Only draws the brick, when it's not destroyed
+                            {
+                                context.fillStyle = colors[k]; // Sets the color of the brick
+                                // On the first loop, take "brickMargin_Horizontal" as the x-coordinate and "brickMargin_Vertical" as the y-coordinate
+                                // After the first loop, take "brickWidth" * "number-of-already-spawned-bricks" + the "brickMargin_Horizontal" as the x-coordinate and "brickHeight" * "number-of-already-spawned-bricks" + "brickMargin_Vertical" as hte y-coordinate
+                                context.fillRect((j == 0 ? brickMargin_Horizontal : (brickWidth * j) + brickMargin_Horizontal), (i == 0 ? brickMargin_Vertical : (brickHeight * i) + brickMargin_Vertical), brickWidth - brickMargin, brickHeight - brickMargin);
+
+                                // On collision
+                                if (ballX >= brickMargin_Horizontal + (brickWidth * j)       &&
+                                    ballX <= (brickWidth * (j + 1)) + brickMargin_Horizontal &&
+                                    ballY >= brickMargin_Vertical + (brickHeight * i)        &&
+                                    ballY <= (brickHeight * (i + 1)) + brickMargin_Vertical
+                                   )
+                                {
+                                    playSound();
+                                    brickGrid[k] = false; // Destroy brick
+                                    bricks--;
+                                    (bricks <= 0 ? isPlaying = false : isPlaying = true);
+                                    tempScore += 10;
+                                    scoreMultiplierValue++;
+                                    scoreMultiplier.innerHTML = "x" +  scoreMultiplierValue;
+
+                                    // Sets ball movement
+                                    ballSpeedY = -ballSpeedY;
+                                    var random1 = Math.random();
+                                    if (random1 <= .5 )
+                                    {
+                                        ballSpeedX = ballSpeedX;
+                                    }
+                                    else
+                                    {
+                                        ballSpeedX = -ballSpeedX;
+                                    }
+                                }
+                            }
+                            k++; // "brickGrid[]"++
+                        }
+                    }
+                }
+                // Player
+                function paddle() {
+                    context.fillStyle = "blue";
+                    context.fillRect(paddleX, paddleY, paddleWidth, paddleHeight);
+                }
+                function ballMovement() {
+                    if (isPlaying)
+                    {
+                        // Initial speed
+                        ballX += ballSpeedX;
+                        ballY += ballSpeedY;
+                    }
+                }
+                function ball() {
+                    context.fillStyle = "white";
+                    context.beginPath();
+                    context.arc(ballX, ballY, ballRadius, 0, Math.PI * 2, true);
+                    context.fill();
+
+                    // Collision with border
+                    if (ballX + ballRadius <= 0 ) // Left side
+                    {
+                        playSound();
+                        ballSpeedX = -ballSpeedX;
+                    }
+                    else if (ballX - ballRadius >= canvas.width) // Right side
+                    {
+                        playSound();
+                        ballSpeedX = -ballSpeedX;
+                    }
+                    if (ballY - ballRadius <= 0) // Top
+                    {
+                        playSound();
+                        ballSpeedY = -ballSpeedY;
+                    }
+                    else if (ballY + ballRadius >= canvas.height) // Bottom
+                    {
+                        resetBall();
+                    }
+
+                    // Collision with paddle
+                    var paddle_Top = paddleY;
+                    var paddle_Bottom = paddleY + paddleHeight;
+                    var paddle_Left = paddleX;
+                    var paddle_Right = paddleX + paddleWidth;
+                    if (ballY + ballRadius > paddle_Top    && // Above paddle
+                        ballY - ballRadius < paddle_Bottom && // Below paddle
+                        ballX + ballRadius <= paddle_Right && // Right side of paddle
+                        ballX - ballRadius >= paddle_Left      // Left side of paddle
+                    )
+                    {
+                        playSound();
+                        ballSpeedY = -ballSpeedY;
+                        var angleMultiplier = .0005; // Multiplier for the angle the ball moves with after collision with the paddle
+                        // How far the ball hits from the center of the paddle
+                        var paddle_Center = paddleX + (paddleWidth / 2);
+                        var distanceFromPaddle;
+                        // If the ball hits left of the center, "distanceFromPaddle" becomes negative
+                        // If the ball hits right of center, "distanceFromPaddle" becomes positive
+                        (ballX < paddle_Center ? distanceFromPaddle = ballX - paddle_Center : distanceFromPaddle =  ballX + paddle_Center);
+                        if (distanceFromPaddle < 0) // Ball hits left of center
+                        {
+                            // "ballSpeedX" becomes negative
+                            (ballSpeedX < 0 ? ballSpeedX = ballSpeedX : ballSpeedX = -ballSpeedX);
+                            ballSpeedX -= distanceFromPaddle * angleMultiplier;
+                        }
+                        else if (distanceFromPaddle > 0) // Ball hits right of center
+                        {
+                            // "ballSpeedX" becomes positive
+                            (ballSpeedX < 0 ? ballSpeedX = - ballSpeedX : ballSpeedX = ballSpeedX);
+                            ballSpeedX += distanceFromPaddle * angleMultiplier;
+                        }
+                    }
+
+                    // Collision with bricks
+
+                }
+                // Moves the ball in a random direction on game start
+                function startGame() {
+                    ballSpeedX = ballSpeed;
+                    ballSpeedY = ballSpeed;
+
+                    var random1 = Math.random();
+
+                    ballSpeedY = -ballSpeedY;
+                    if (random1 <= .5) // Move ball to the right
+                    {
+                        ballSpeedX = ballSpeedX;
+                    }
+                    else if (random1 <= 1) // Move ball to the left
+                    {
+                        ballSpeedX = -ballSpeedX;
+                    }
+                }
+                // Resets the ball to its original position
+                function resetBall() {
+                    ballX = canvas.width / 2;
+                    ballY = canvas.height / 2;
+
+                    // Draws score and resets "tempScore" and "scoreMultiplier"
+                    addScore();
+                    tempScore = 0;
+                    (scoreMultiplierValue > highestMultiplierValue ? highestMultiplierValue = scoreMultiplierValue : highestMultiplierValue = highestMultiplierValue); // Saves the highest "scoreMultiplier" reached
+                    scoreMultiplierValue = 0;
+                    scoreMultiplier.innerHTML = "";
+                    startGame();
+                }
+                // Return a random color hex code
+                function randomColor() {
+                    var letters = "0123456789ABCDEF";
+                    var color = "#";
+
+                    for (var i = 0; i < 6; i++)
+                    {
+                        color += letters[Math.floor(Math.random() * 16)]
+                    }
+                    return color;
+                }
+                // Plays sound on ball collision
+                function playSound() {
+                    if (!isPlayingPongSound) // If the sound is not currently playing
+                    {
+                        soundCheck(pongSound);
+                        isPlayingPongSound = true;
+                        setTimeout(function () { // Set "isPlayingSound" to false and sets "pongSound"'s time back to 0 after it finished playing
+                            isPlayingPongSound = false;
+                            pongSound.currentTime = 0;
+                        }, pongSound.duration)
+                    }
+                    else // If sound is currently playing
+                    {
+                        // Stop running sound and start it again from 0
+                        pongSound.pause();
+                        pongSound.currentTime = 0;
+                        soundCheck(pongSound);
+                        setTimeout(function () { // Set "isPlayingSound" to false and sets "pongSound"'s time back to 0 after it finished playing
+                            isPlayingPongSound = false;
+                            pongSound.currentTime = 0;
+                        }, pongSound.duration)
+                    }
+                }
+                /* Draws the multiplied score to the screen */
+                function addScore() {
+                    tempScoreValue += tempScore * scoreMultiplierValue;
+                    setInterval(function () {
+                        setTimeout(function () {
+
+                            if (tempScoreValue > 0)
+                            {
+                                // Plays sound while the score is increasing
+                                isPlayingCoinSound = true;
+                                soundCheck(coinSound);
+
+                                tempScoreValue -= 10;
+                                scoreValue += 10;
+                                score.innerHTML = scoreValue.toLocaleString().replace(",", "."); // Formats the number and draws it to the screen
+                            }
+                        }, 100);
+                        // When "tempScoreValue" is 0, finish the running sound clip, then stop
+                        if (tempScoreValue == 0 && !isPlayingCoinSound)
+                        {
+                            setTimeout(function () {
+                                coinSound.pause();
+                                coinSound.currentTime = 0;
+                            }, coinSound.duration + coinSound.currentTime);
+                        }
+                    }, 1);
+                    isPlayingCoinSound = false;
+                }
+                // Only plays sound if volume is enabled, pauses every running sound if it's disabled
+                function soundCheck(clip) {
+                    if (volume)
+                    {
+                        clip.play();
+                    }
+                    else{
+                        clip.pause();
+                    }
+                }
+            </script>
+        </section>
+    </body>
+</html>
